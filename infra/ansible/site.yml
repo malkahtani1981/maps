@@ -1,0 +1,28 @@
+---
+# Full provisioning: hardening + Docker on all hosts, then role-specific stacks.
+# Usage:
+#   ansible-playbook site.yml                    # everything
+#   ansible-playbook site.yml --tags app         # app VM only
+#   ansible-playbook site.yml --tags deploy      # redeploy app containers only
+
+- name: Common hardening & Docker
+  hosts: all
+  become: true
+  roles:
+    - common
+    - docker
+  tags: [base]
+
+- name: Data VM — PostgreSQL + pgRouting + Memgraph
+  hosts: data
+  become: true
+  roles:
+    - data_stack
+  tags: [data]
+
+- name: App VM — API + Redis + routing engine + Caddy (TLS)
+  hosts: app
+  become: true
+  roles:
+    - app_stack
+  tags: [app, deploy]
