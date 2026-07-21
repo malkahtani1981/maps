@@ -1,28 +1,28 @@
 ---
-- name: UFW — allow Postgres & Bolt from app VM only
+- name: UFW — allow Postgres, Bolt & Kafka from presenting VM only
   ufw:
     rule: allow
     port: "{{ item }}"
     proto: tcp
     src: "{{ presenting_ip }}"
-  loop: ["5432", "7687"]
+  loop: ["5432", "7687", "9092"]
 
 - name: Create stack directory
   file:
-    path: /opt/maps/data
+    path: /opt/maps/processing
     state: directory
     owner: root
 
-- name: Render docker-compose for data stack
+- name: Render docker-compose for processing stack
   template:
     src: docker-compose.yml.j2
-    dest: /opt/maps/data/docker-compose.yml
+    dest: /opt/maps/processing/docker-compose.yml
     owner: root
-  notify: restart data stack
+  notify: restart processing stack
 
-- name: Start data stack
+- name: Start processing stack
   community.docker.docker_compose_v2:
-    project_src: /opt/maps/data
+    project_src: /opt/maps/processing
     state: present
 
 - name: Nightly pg_dump backup cron
