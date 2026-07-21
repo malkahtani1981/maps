@@ -1,0 +1,13 @@
+# Required OCI credentials
+tenancy_ocid     = "ocid1.tenancy.oc1.."
+user_ocid        = "ocid1.user.oc1.."
+fingerprint      = "aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99"
+private_key_path = "~/.ssh/oci_api_key.pem"
+
+# Optional: defaults to the root compartment if left empty
+compartment_ocid = ""
+
+region               = "us-ashburn-1"
+availability_domain  = "AD-1"
+
+ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI..."
