@@ -6,7 +6,7 @@
 
     **Deployment:** two Hetzner Cloud VMs provisioned by Terraform + Ansible, deployed by GitHub Actions:
     - **Graph processing VM** — PostgreSQL/pgRouting, Memgraph, Kafka, Spark, Airflow
-    - **Graph presenting VM** — Caddy (TLS), JSON API, Redis, GraphHopper, OSRM, Photon, Prometheus/Grafana, MapLibre frontend
+    - **Graph presenting VM** — Caddy (TLS), JSON API, Redis, GraphHopper, OSRM, Photon, Prometheus/Grafana, MapLibre frontend with a layer switcher (OpenStreetMap, satellite, terrain), Nominatim reverse geocoding, and external verification links for Google Maps and Google Earth
 
     Start here:
     - **docs/alula-map-poc-cost-and-architecture.md** — full educational architecture: what each technology teaches, per-VM software roles, hierarchical scaling to country/world level, user-content graph layer
