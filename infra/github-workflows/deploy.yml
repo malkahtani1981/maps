@@ -23,14 +23,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Adjust context/dockerfile once the API service lands in this repo.
+      - name: Check whether the API service exists yet
+        id: api_check
+        run: |
+          if [ -f api/Dockerfile ]; then echo "exists=true" >> "$GITHUB_OUTPUT"; else echo "exists=false" >> "$GITHUB_OUTPUT"; fi
+
+      # Hard gate once ./api exists: a failed build fails the pipeline (no stale deploys).
       - name: Build & push API image
+        if: steps.api_check.outputs.exists == 'true'
         uses: docker/build-push-action@v6
         with:
           context: ./api
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/maps-api:latest
-        continue-on-error: true # remove once ./api exists
 
   deploy:
     needs: build
