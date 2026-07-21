@@ -137,6 +137,10 @@
       panel.classList.toggle("hidden");
       updatePanelButton();
     };
+    // On mobile, start with the panel hidden so the map is visible.
+    if (window.matchMedia("(max-width: 700px)").matches) {
+      panel.classList.add("hidden");
+    }
     updatePanelButton();
 
     function setMapStyle(sources) {
