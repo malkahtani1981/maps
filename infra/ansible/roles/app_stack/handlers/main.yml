@@ -1,5 +1,0 @@
----
-- name: restart app stack
-  community.docker.docker_compose_v2:
-    project_src: /opt/maps/app
-    state: restarted
