@@ -20,4 +20,4 @@
     - **data/** — Al Ula OSM extract snapshot (1,475 ways, 7,811 nodes) + derived edge/node CSVs.
     
 
-For deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md).
+For deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md). Two provider options are ready: **Oracle Cloud** (Always Free tier) and **Hetzner Cloud** (low cost).
