@@ -240,7 +240,7 @@ docker compose up -d api
 
 - **Terraform changes:** planned automatically on PRs touching the provider's terraform folder; applied only via manual dispatch with `apply=true`.
 - **Application deploys:** every push to `main` triggers the full Ansible deploy (or run it manually).
-- **Backups:** nightly `pg_dump` on the processing VM with 7-day retention in `/opt/maps/backups`. Sync this directory to any S3-compatible bucket for off-site copies.
+- **Backups:** nightly `pg_dump` on the processing VM with 7-day retention in `/opt/maps/backups`. Sync this directory to any S3-compatible bucket for off-site copies. For a secure admin demo, see `ADMIN_DEMO.md`.
 - **Terraform state:** local by default. For team use, configure an S3-compatible backend in `infra/terraform/main.tf` or `infra/terraform-oci/main.tf`.
 
 ---
