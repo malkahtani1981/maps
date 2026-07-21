@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Graph Maps — Al Ula Routing Lab</title>
   <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
   <style>
@@ -11,20 +11,24 @@
       --muted: #8b98a8; --accent: #e8a33d; --accent2: #4fa3ff;
     }
     * { box-sizing: border-box; margin: 0; }
-    body { font-family: ui-sans-serif, system-ui, sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; }
-    header { padding: 10px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    html, body { height: 100%; overflow: hidden; }
+    body { font-family: ui-sans-serif, system-ui, sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; }
+    header { padding: 8px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; flex: 0 0 auto; }
     header h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.02em; }
     header h1 span { color: var(--accent); }
     header p { font-size: 12px; color: var(--muted); }
-    #wrap { flex: 1; display: flex; min-height: 0; }
-    #map { flex: 1; }
-    aside { width: 320px; border-left: 1px solid var(--line); background: var(--panel); padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+    #wrap { flex: 1; position: relative; min-height: 0; overflow: hidden; }
+    #map { position: absolute; inset: 0; }
+    aside { position: absolute; top: 0; right: 0; bottom: 0; width: 300px; border-left: 1px solid var(--line); background: var(--panel); padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; z-index: 5; transition: transform 0.25s ease; }
+    aside.hidden { transform: translateX(100%); }
     aside h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 6px; }
     .hint { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
     select, button, input { width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: #12171e; color: var(--text); font-size: 13px; }
     button { cursor: pointer; background: var(--accent); color: #14100a; font-weight: 600; border: none; }
     button:disabled { opacity: 0.4; cursor: default; }
     button.secondary { background: #232c38; color: var(--text); font-weight: 500; }
+    #panelToggle { position: absolute; top: 10px; right: 10px; z-index: 10; width: auto; padding: 6px 10px; font-size: 12px; }
+    #panelToggle.panel-open { right: 310px; }
     .row { display: flex; gap: 8px; }
     table { width: 100%; font-size: 12.5px; border-collapse: collapse; }
     td { padding: 4px 0; border-bottom: 1px solid var(--line); }
@@ -40,7 +44,11 @@
     .verify-links { display: flex; flex-direction: column; gap: 4px; }
     .verify-links a { font-size: 12px; color: var(--accent2); text-decoration: none; }
     .verify-links a:hover { text-decoration: underline; }
-    @media (max-width: 700px) { #wrap { flex-direction: column; } aside { width: 100%; border-left: none; border-top: 1px solid var(--line); } }
+    @media (max-width: 700px) {
+      header p { display: none; }
+      aside { width: 100%; border-left: none; }
+      #panelToggle.panel-open { right: 10px; }
+    }
   </style>
 </head>
 <body>
@@ -49,8 +57,9 @@
     <p>Educational graph processing on real OSM data — click two points on the map to route between them.</p>
   </header>
   <div id="wrap">
+    <button id="panelToggle" class="secondary">Hide panel</button>
     <div id="map"></div>
-    <aside>
+    <aside id="panel">
       <section>
         <h2>Map layer</h2>
         <select id="layer"></select>
@@ -93,8 +102,6 @@
   </div>
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script>
-    // Works both when the page is served at / (api at ./api/) and when the
-    // whole app sits behind an /api prefix (Replit preview proxy).
     const API = location.pathname.replace(/\/+$/, "").endsWith("/api") ? "." : "api";
 
     const statsPromise = fetch(`${API}/graph/stats`).then((r) => r.json());
@@ -114,10 +121,23 @@
 
     let map;
     let currentSourceId = "osm";
-    let points = []; // [{lngLat, marker}]
+    let points = [];
     const routeBtn = document.getElementById("routeBtn");
     const status = document.getElementById("status");
     const selectedPoint = document.getElementById("selectedPoint");
+    const panel = document.getElementById("panel");
+    const panelToggle = document.getElementById("panelToggle");
+
+    function updatePanelButton() {
+      const hidden = panel.classList.contains("hidden");
+      panelToggle.textContent = hidden ? "Show panel" : "Hide panel";
+      panelToggle.classList.toggle("panel-open", !hidden);
+    }
+    panelToggle.onclick = () => {
+      panel.classList.toggle("hidden");
+      updatePanelButton();
+    };
+    updatePanelButton();
 
     function setMapStyle(sources) {
       const src = sources[currentSourceId] || sources[0];
@@ -141,7 +161,7 @@
           sources: { [currentSourceId]: { type: "raster", tiles: sources.find((s) => s.id === currentSourceId).tiles, tileSize: 256, attribution: sources.find((s) => s.id === currentSourceId).attribution } },
           layers: [{ id: currentSourceId, type: "raster", source: currentSourceId }],
         },
-        center: [37.93, 26.62], // Al Ula
+        center: [37.93, 26.62],
         zoom: 12,
       });
       map.addControl(new maplibregl.NavigationControl());
