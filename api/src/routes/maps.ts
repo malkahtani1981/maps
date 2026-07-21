@@ -2,6 +2,11 @@ import { Router, type IRouter } from "express";
 import { getGraph } from "../lib/graph";
 import { getCache } from "../lib/cache";
 import {
+  buildLocationInfo,
+  getMapSources,
+  verifyWithGoogle,
+} from "../lib/geo";
+import {
   ENGINE_NAMES,
   EngineUnavailableError,
   listEngines,
@@ -28,6 +33,34 @@ router.get("/graph/stats", (_req, res) => {
 /** Which routing engines are configured (memory always; pgRouting/GraphHopper via env). */
 router.get("/engines", async (_req, res) => {
   res.json({ engines: await listEngines() });
+});
+
+/** Available map tile layers (OSM, satellite, terrain). No API keys are exposed. */
+router.get("/map-sources", (_req, res) => {
+  res.json({ sources: getMapSources() });
+});
+
+/** Location info for a clicked point: reverse geocoding + external verification links. */
+router.get("/location-info", async (req, res) => {
+  const p = parsePoint(req.query["point"]);
+  if (!p) {
+    res.status(400).json({ error: "point=lat,lon is required" });
+    return;
+  }
+  const info = await buildLocationInfo(p[0], p[1]);
+  res.json(info);
+});
+
+/** Optional cross-check against Google Maps Directions API (requires GOOGLE_MAPS_API_KEY). */
+router.get("/verify/google", async (req, res) => {
+  const from = parsePoint(req.query["from"]);
+  const to = parsePoint(req.query["to"]);
+  if (!from || !to) {
+    res.status(400).json({ error: "from=lat,lon and to=lat,lon are required" });
+    return;
+  }
+  const result = await verifyWithGoogle(from[0], from[1], to[0], to[1]);
+  res.json(result);
 });
 
 /** Snap a point to the nearest graph node. */
