@@ -30,14 +30,18 @@ const hav = (a, b) => {
 const edgeLines = ["src,dst,length_m,way_id"];
 for (const el of raw.elements) {
   if (el.type !== "way" || !Array.isArray(el.nodes)) continue;
-  const oneway = el.tags?.oneway === "yes" || el.tags?.junction === "roundabout";
+  // OSM oneway semantics: yes/1/true = forward only, -1 = reverse only.
+  const ow = el.tags?.oneway;
+  const forwardOnly =
+    ow === "yes" || ow === "1" || ow === "true" || el.tags?.junction === "roundabout";
+  const reverseOnly = ow === "-1";
   for (let i = 0; i + 1 < el.nodes.length; i++) {
     const a = nodes.get(el.nodes[i]);
     const b = nodes.get(el.nodes[i + 1]);
     if (!a || !b) continue;
     const w = hav(a, b).toFixed(1);
-    edgeLines.push(`${a.id},${b.id},${w},${el.id}`);
-    if (!oneway) edgeLines.push(`${b.id},${a.id},${w},${el.id}`);
+    if (!reverseOnly) edgeLines.push(`${a.id},${b.id},${w},${el.id}`);
+    if (!forwardOnly) edgeLines.push(`${b.id},${a.id},${w},${el.id}`);
   }
 }
 const nodeLines = ["id,lat,lon"];
