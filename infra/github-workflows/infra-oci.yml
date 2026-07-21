@@ -1,0 +1,48 @@
+name: Infrastructure (Terraform / Oracle Cloud)
+
+on:
+  pull_request:
+    paths: ["infra/terraform-oci/**"]
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Apply changes (true) or plan only (false)"
+        default: "false"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  TF_VAR_tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
+  TF_VAR_user_ocid: ${{ secrets.OCI_USER_OCID }}
+  TF_VAR_fingerprint: ${{ secrets.OCI_FINGERPRINT }}
+  TF_VAR_private_key: ${{ secrets.OCI_PRIVATE_KEY }}
+  TF_VAR_compartment_ocid: ${{ secrets.OCI_COMPARTMENT_OCID }}
+  TF_VAR_region: ${{ vars.OCI_REGION }}
+  TF_VAR_availability_domain: ${{ vars.OCI_AVAILABILITY_DOMAIN }}
+  TF_VAR_ssh_public_key: ${{ secrets.DEPLOY_SSH_PUBLIC_KEY }}
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform-oci
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform fmt & validate
+        run: |
+          terraform fmt -check -recursive
+          terraform init -input=false
+          terraform validate
+
+      - name: Terraform plan
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Terraform apply (manual dispatch only)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.apply == 'true'
+        run: terraform apply -input=false -auto-approve tfplan
