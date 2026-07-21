@@ -13,5 +13,9 @@
     - **infra/** — Terraform (Hetzner) + Ansible. See infra/README.md for setup.
     - **infra/github-workflows/** — CI/CD workflows (move into `.github/workflows/` to activate — see that folder's README)
 
-    Application code (API, frontend, ETL, Spark jobs) lands next.
+    Application code:
+    - **api/** — Express + TypeScript routing API and MapLibre frontend. Three interchangeable engines behind `GET /api/route`: in-memory Dijkstra/A* (always on), pgRouting (PostGIS), GraphHopper (CH). Redis cache-aside. See api/README.md.
+    - **etl/** — Overpass fetch, CSV export, osm2pgrouting and Memgraph Cypher load steps. See etl/README.md.
+    - **spark-jobs/** — GraphFrames PageRank / connected-components analysis of the road network.
+    - **data/** — Al Ula OSM extract snapshot (1,475 ways, 7,811 nodes) + derived edge/node CSVs.
     
