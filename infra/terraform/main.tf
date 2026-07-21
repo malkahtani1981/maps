@@ -1,125 +1,98 @@
 terraform {
   required_version = ">= 1.6"
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
+    hcloud = {
+      source  = "hetznercloud/hcloud"
+      version = "~> 1.48"
     }
   }
-  # Recommended: remote state. Create the bucket once, then uncomment.
-  # backend "s3" {
-  #   bucket = "maps-terraform-state-<your-suffix>"
-  #   key    = "lightsail/terraform.tfstate"
-  #   region = "me-south-1"
-  # }
+  # Recommended: remote state (S3-compatible, e.g. Hetzner Object Storage or Backblaze B2).
+  # backend "s3" { ... }
 }
 
-provider "aws" {
-  region = var.region
+provider "hcloud" {
+  token = var.hcloud_token
 }
 
 # ---------------------------------------------------------------------------
-# SSH key used by Ansible / GitHub Actions to reach the instances
+# SSH key used by Ansible / GitHub Actions to reach the servers
 # ---------------------------------------------------------------------------
-resource "aws_lightsail_key_pair" "deploy" {
+resource "hcloud_ssh_key" "deploy" {
   name       = "${var.project}-deploy"
   public_key = var.ssh_public_key
 }
 
 # ---------------------------------------------------------------------------
-# App VM: JSON API + Redis + GraphHopper/OSRM
+# Graph PRESENTING VM: Caddy (TLS) -> JSON API + Redis + GraphHopper + frontend
 # ---------------------------------------------------------------------------
-resource "aws_lightsail_instance" "app" {
-  name              = "${var.project}-app"
-  availability_zone = "${var.region}a"
-  blueprint_id      = var.blueprint_id
-  bundle_id         = var.app_bundle_id
-  key_pair_name     = aws_lightsail_key_pair.deploy.name
+resource "hcloud_server" "presenting" {
+  name        = "${var.project}-presenting"
+  server_type = var.presenting_server_type
+  image       = var.image
+  location    = var.location
+  ssh_keys    = [hcloud_ssh_key.deploy.id]
+  labels      = { project = var.project, role = "presenting" }
 
-  tags = { project = var.project, role = "app" }
+  firewall_ids = [hcloud_firewall.presenting.id]
 }
 
-resource "aws_lightsail_static_ip" "app" {
-  name = "${var.project}-app-ip"
-}
+resource "hcloud_firewall" "presenting" {
+  name = "${var.project}-presenting-fw"
 
-resource "aws_lightsail_static_ip_attachment" "app" {
-  static_ip_name = aws_lightsail_static_ip.app.name
-  instance_name  = aws_lightsail_instance.app.name
-}
-
-resource "aws_lightsail_instance_public_ports" "app" {
-  instance_name = aws_lightsail_instance.app.name
-
-  port_info {
-    protocol  = "tcp"
-    from_port = 22
-    to_port   = 22
-    cidrs     = var.ssh_allowed_cidrs
+  rule {
+    direction  = "in"
+    protocol   = "tcp"
+    port       = "22"
+    source_ips = var.ssh_allowed_cidrs
   }
-  port_info {
-    protocol  = "tcp"
-    from_port = 80
-    to_port   = 80
+  rule {
+    direction  = "in"
+    protocol   = "tcp"
+    port       = "80"
+    source_ips = ["0.0.0.0/0", "::/0"]
   }
-  port_info {
-    protocol  = "tcp"
-    from_port = 443
-    to_port   = 443
+  rule {
+    direction  = "in"
+    protocol   = "tcp"
+    port       = "443"
+    source_ips = ["0.0.0.0/0", "::/0"]
   }
 }
 
 # ---------------------------------------------------------------------------
-# Data VM: PostgreSQL + pgRouting + Memgraph
+# Graph PROCESSING VM: PostgreSQL + pgRouting, Memgraph, Spark batch jobs
+# DB ports (5432, 7687) accept traffic only from the presenting VM.
 # ---------------------------------------------------------------------------
-resource "aws_lightsail_instance" "data" {
-  name              = "${var.project}-data"
-  availability_zone = "${var.region}a"
-  blueprint_id      = var.blueprint_id
-  bundle_id         = var.data_bundle_id
-  key_pair_name     = aws_lightsail_key_pair.deploy.name
+resource "hcloud_server" "processing" {
+  name        = "${var.project}-processing"
+  server_type = var.processing_server_type
+  image       = var.image
+  location    = var.location
+  ssh_keys    = [hcloud_ssh_key.deploy.id]
+  labels      = { project = var.project, role = "processing" }
 
-  tags = { project = var.project, role = "data" }
+  firewall_ids = [hcloud_firewall.processing.id]
 }
 
-resource "aws_lightsail_static_ip" "data" {
-  name = "${var.project}-data-ip"
-}
+resource "hcloud_firewall" "processing" {
+  name = "${var.project}-processing-fw"
 
-resource "aws_lightsail_static_ip_attachment" "data" {
-  static_ip_name = aws_lightsail_static_ip.data.name
-  instance_name  = aws_lightsail_instance.data.name
-}
-
-# Data VM: SSH only from allowed CIDRs; DB ports only from the app VM.
-resource "aws_lightsail_instance_public_ports" "data" {
-  instance_name = aws_lightsail_instance.data.name
-
-  port_info {
-    protocol  = "tcp"
-    from_port = 22
-    to_port   = 22
-    cidrs     = var.ssh_allowed_cidrs
+  rule {
+    direction  = "in"
+    protocol   = "tcp"
+    port       = "22"
+    source_ips = var.ssh_allowed_cidrs
   }
-  port_info {
-    protocol  = "tcp"
-    from_port = 5432
-    to_port   = 5432
-    cidrs     = ["${aws_lightsail_static_ip.app.ip_address}/32"]
+  rule {
+    direction  = "in"
+    protocol   = "tcp"
+    port       = "5432" # PostgreSQL / pgRouting
+    source_ips = ["${hcloud_server.presenting.ipv4_address}/32"]
   }
-  port_info {
-    protocol  = "tcp"
-    from_port = 7687 # Memgraph/Bolt
-    to_port   = 7687
-    cidrs     = ["${aws_lightsail_static_ip.app.ip_address}/32"]
+  rule {
+    direction  = "in"
+    protocol   = "tcp"
+    port       = "7687" # Memgraph / Bolt
+    source_ips = ["${hcloud_server.presenting.ipv4_address}/32"]
   }
-}
-
-# ---------------------------------------------------------------------------
-# Object storage bucket for user photos / GeoJSON / backups
-# ---------------------------------------------------------------------------
-resource "aws_lightsail_bucket" "assets" {
-  name      = "${var.project}-assets"
-  bundle_id = "small_1_0" # 5 GB, $1/mo — resize as needed
-  tags      = { project = var.project }
 }
