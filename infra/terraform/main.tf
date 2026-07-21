@@ -95,4 +95,10 @@ resource "hcloud_firewall" "processing" {
     port       = "7687" # Memgraph / Bolt
     source_ips = ["${hcloud_server.presenting.ipv4_address}/32"]
   }
+  rule {
+    direction  = "in"
+    protocol   = "tcp"
+    port       = "9092" # Kafka (extended educational profile)
+    source_ips = ["${hcloud_server.presenting.ipv4_address}/32"]
+  }
 }
