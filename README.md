@@ -19,3 +19,5 @@
     - **spark-jobs/** — GraphFrames PageRank / connected-components analysis of the road network.
     - **data/** — Al Ula OSM extract snapshot (1,475 ways, 7,811 nodes) + derived edge/node CSVs.
     
+
+For deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md).
