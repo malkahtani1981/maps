@@ -1,9 +1,9 @@
 ---
 # Full provisioning: hardening + Docker on all hosts, then role-specific stacks.
 # Usage:
-#   ansible-playbook site.yml                    # everything
-#   ansible-playbook site.yml --tags app         # app VM only
-#   ansible-playbook site.yml --tags deploy      # redeploy app containers only
+#   ansible-playbook site.yml                       # everything
+#   ansible-playbook site.yml --tags presenting     # presenting VM only
+#   ansible-playbook site.yml --tags deploy         # redeploy presenting containers only
 
 - name: Common hardening & Docker
   hosts: all
@@ -13,16 +13,16 @@
     - docker
   tags: [base]
 
-- name: Data VM — PostgreSQL + pgRouting + Memgraph
-  hosts: data
+- name: Graph-processing VM — PostgreSQL + pgRouting + Memgraph
+  hosts: processing
   become: true
   roles:
-    - data_stack
-  tags: [data]
+    - processing_stack
+  tags: [processing]
 
-- name: App VM — API + Redis + routing engine + Caddy (TLS)
-  hosts: app
+- name: Graph-presenting VM — API + Redis + GraphHopper + Caddy (TLS)
+  hosts: presenting
   become: true
   roles:
-    - app_stack
-  tags: [app, deploy]
+    - presenting_stack
+  tags: [presenting, deploy]
