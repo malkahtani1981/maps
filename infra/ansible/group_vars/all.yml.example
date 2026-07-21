@@ -1,0 +1,7 @@
+# Copy to all.yml (gitignored) or supply via --extra-vars / GitHub Actions secrets.
+postgres_password: CHANGE_ME
+domain: maps.example.com
+app_ip: "203.0.113.10"   # terraform output app_public_ip
+data_ip: "203.0.113.11"  # terraform output data_public_ip
+ghcr_username: malkahtani1981
+# ghcr_token: supplied by CI as secret
