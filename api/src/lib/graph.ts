@@ -112,7 +112,11 @@ export class RoadGraph {
     for (const el of elements) {
       if (el.type !== "way" || !Array.isArray(el.nodes)) continue;
       g.wayCount++;
-      const oneway = el.tags?.oneway === "yes" || el.tags?.junction === "roundabout";
+      // OSM oneway semantics: yes/1/true = forward only, -1 = reverse only
+      // (against node order), roundabouts are implicitly oneway forward.
+      const ow = el.tags?.oneway;
+      const forwardOnly = ow === "yes" || ow === "1" || ow === "true" || el.tags?.junction === "roundabout";
+      const reverseOnly = ow === "-1";
       for (let i = 0; i + 1 < el.nodes.length; i++) {
         const a = g.idToIndex.get(el.nodes[i]);
         const b = g.idToIndex.get(el.nodes[i + 1]);
@@ -120,9 +124,11 @@ export class RoadGraph {
         const na = g.nodes[a]!;
         const nb = g.nodes[b]!;
         const w = haversine(na.lat, na.lon, nb.lat, nb.lon);
-        g.adj[a]!.push({ to: b, weight: w, wayId: el.id });
-        g.edgeCount++;
-        if (!oneway) {
+        if (!reverseOnly) {
+          g.adj[a]!.push({ to: b, weight: w, wayId: el.id });
+          g.edgeCount++;
+        }
+        if (!forwardOnly) {
           g.adj[b]!.push({ to: a, weight: w, wayId: el.id });
           g.edgeCount++;
         }
