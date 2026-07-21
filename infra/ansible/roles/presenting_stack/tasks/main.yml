@@ -8,23 +8,23 @@
 
 - name: Create stack directory
   file:
-    path: /opt/maps/app
+    path: /opt/maps/presenting
     state: directory
     owner: root
 
-- name: Render docker-compose for app stack
+- name: Render docker-compose for presenting stack
   template:
     src: docker-compose.yml.j2
-    dest: /opt/maps/app/docker-compose.yml
+    dest: /opt/maps/presenting/docker-compose.yml
     owner: root
-  notify: restart app stack
+  notify: restart presenting stack
 
 - name: Render Caddyfile (automatic TLS)
   template:
     src: Caddyfile.j2
-    dest: /opt/maps/app/Caddyfile
+    dest: /opt/maps/presenting/Caddyfile
     owner: root
-  notify: restart app stack
+  notify: restart presenting stack
 
 - name: Log in to GitHub Container Registry
   community.docker.docker_login:
@@ -33,8 +33,8 @@
     password: "{{ ghcr_token }}"
   when: ghcr_token is defined
 
-- name: Pull latest images & start app stack
+- name: Pull latest images & start presenting stack
   community.docker.docker_compose_v2:
-    project_src: /opt/maps/app
+    project_src: /opt/maps/presenting
     state: present
     pull: always
