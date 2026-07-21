@@ -41,3 +41,11 @@
     path: /opt/maps/backups
     state: directory
     owner: root
+
+- name: Sync backup scripts to VM
+  copy:
+    src: "../../../../scripts/"
+    dest: /opt/maps/scripts/
+    owner: root
+    mode: "0755"
+  notify: restart processing stack
