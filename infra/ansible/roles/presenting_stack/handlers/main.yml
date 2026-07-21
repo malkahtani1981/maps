@@ -1,5 +1,5 @@
 ---
-- name: restart app stack
+- name: restart presenting stack
   community.docker.docker_compose_v2:
-    project_src: /opt/maps/app
+    project_src: /opt/maps/presenting
     state: restarted
