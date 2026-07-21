@@ -1,10 +1,10 @@
 # Copy to inventory.ini and fill with `terraform output ansible_inventory`
-[app]
+[presenting]
 203.0.113.10
 
-[data]
+[processing]
 203.0.113.11
 
 [all:vars]
-ansible_user=ubuntu
+ansible_user=root
 ansible_ssh_private_key_file=~/.ssh/maps_deploy
