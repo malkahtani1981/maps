@@ -21,3 +21,5 @@
     
 
 For deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md). Two provider options are ready: **Oracle Cloud** (Always Free tier) and **Hetzner Cloud** (low cost).
+
+For running a secure admin demo and backup strategy, see [ADMIN_DEMO.md](ADMIN_DEMO.md).
