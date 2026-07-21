@@ -1,0 +1,75 @@
+# Graph PROCESSING stack.
+# Core services start by default; the extended educational stack starts with:
+#   docker compose --profile extended up -d
+services:
+  postgres:
+    image: pgrouting/pgrouting:16-3.4-3.6
+    container_name: maps-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: maps
+      POSTGRES_PASSWORD: "{{ postgres_password }}"
+      POSTGRES_DB: maps
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  memgraph:
+    image: memgraph/memgraph-mage:latest
+    container_name: maps-memgraph
+    restart: unless-stopped
+    ports:
+      - "7687:7687"
+    volumes:
+      - mgdata:/var/lib/memgraph
+
+  # --- Extended educational stack (single-node deployments of distributed systems) ---
+
+  kafka:
+    image: apache/kafka:3.8.0
+    container_name: maps-kafka
+    restart: unless-stopped
+    profiles: [extended]
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    volumes:
+      - kafkadata:/var/lib/kafka/data
+
+  spark:
+    image: bitnami/spark:3.5
+    container_name: maps-spark
+    restart: unless-stopped
+    profiles: [extended]
+    environment:
+      SPARK_MODE: master
+    ports:
+      - "127.0.0.1:8081:8080" # Spark UI, SSH-tunnel only
+    volumes:
+      - ./spark-jobs:/opt/spark-jobs
+
+  airflow:
+    image: apache/airflow:2.10.3
+    container_name: maps-airflow
+    restart: unless-stopped
+    profiles: [extended]
+    command: standalone
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    ports:
+      - "127.0.0.1:8082:8080" # Airflow UI, SSH-tunnel only
+    volumes:
+      - ./airflow-dags:/opt/airflow/dags
+      - airflowdata:/opt/airflow
+
+volumes:
+  pgdata:
+  mgdata:
+  kafkadata:
+  airflowdata:
