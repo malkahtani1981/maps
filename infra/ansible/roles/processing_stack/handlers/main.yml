@@ -1,5 +1,5 @@
 ---
-- name: restart data stack
+- name: restart processing stack
   community.docker.docker_compose_v2:
-    project_src: /opt/maps/data
+    project_src: /opt/maps/processing
     state: restarted
