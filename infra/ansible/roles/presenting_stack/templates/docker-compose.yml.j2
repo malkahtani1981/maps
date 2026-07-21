@@ -1,0 +1,90 @@
+# Graph PRESENTING stack.
+# Core services start by default; the extended educational stack starts with:
+#   docker compose --profile extended up -d
+services:
+  caddy:
+    image: caddy:2
+    container_name: maps-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+
+  api:
+    # Built and pushed by GitHub Actions (see .github/workflows/deploy.yml)
+    image: ghcr.io/{{ ghcr_username | default('malkahtani1981') }}/maps-api:latest
+    container_name: maps-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "postgres://maps:{{ postgres_password }}@{{ processing_ip }}:5432/maps"
+      MEMGRAPH_URI: "bolt://{{ processing_ip }}:7687"
+      REDIS_URL: "redis://redis:6379"
+      KAFKA_BROKERS: "{{ processing_ip }}:9092" # extended profile only
+    depends_on: [redis]
+
+  redis:
+    image: redis:7-alpine
+    container_name: maps-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+
+  graphhopper:
+    image: israelhikingmap/graphhopper:latest
+    container_name: maps-graphhopper
+    restart: unless-stopped
+    command: ["--url", "https://download.geofabrik.de/asia/gcc-states-latest.osm.pbf", "--host", "0.0.0.0"]
+    volumes:
+      - ghdata:/data
+
+  # --- Extended educational stack ---
+
+  osrm:
+    # Requires pre-built .osrm files in ./osrm-data (osrm-extract + osrm-contract, see engines/)
+    image: ghcr.io/project-osrm/osrm-backend:latest
+    container_name: maps-osrm
+    restart: unless-stopped
+    profiles: [extended]
+    command: ["osrm-routed", "--algorithm", "mld", "/data/map.osrm"]
+    volumes:
+      - ./osrm-data:/data
+
+  photon:
+    # OSM geocoder (Elasticsearch-based) — place-name search
+    image: rtuszik/photon-docker:latest
+    container_name: maps-photon
+    restart: unless-stopped
+    profiles: [extended]
+    volumes:
+      - photondata:/photon/photon_data
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: maps-prometheus
+    restart: unless-stopped
+    profiles: [extended]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: maps-grafana
+    restart: unless-stopped
+    profiles: [extended]
+    ports:
+      - "127.0.0.1:3000:3000" # SSH-tunnel or expose via Caddy
+    volumes:
+      - grafanadata:/var/lib/grafana
+
+volumes:
+  caddy_data:
+  redisdata:
+  ghdata:
+  photondata:
+  promdata:
+  grafanadata:
