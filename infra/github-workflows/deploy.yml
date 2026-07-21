@@ -33,7 +33,8 @@ jobs:
         if: steps.api_check.outputs.exists == 'true'
         uses: docker/build-push-action@v6
         with:
-          context: ./api
+          context: . # repo root so data/alula-roads.json can be baked into the image
+          file: api/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/maps-api:latest
 
