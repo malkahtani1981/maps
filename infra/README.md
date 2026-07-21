@@ -1,64 +1,59 @@
-# Maps — Infrastructure (Terraform + Ansible + GitHub Actions)
+# Maps — Infrastructure (Terraform + Ansible + GitHub Actions, Hetzner Cloud)
 
-Production infra for the Al Ula / Saudi maps project on **AWS Lightsail (me-south-1, Bahrain)** — the lowest-cost AWS option that fits the routing stack (~$50/mo for two 2 vCPU / 4 GB VMs).
+Two-VM deployment on **Hetzner Cloud**, fully provisioned by CI/CD.
+
+## Topology
+
+| VM | Role | Software (core) | Software (extended profile) |
+|---|---|---|---|
+| `maps-processing` | **Graph processing** | PostgreSQL + PostGIS + pgRouting, Memgraph (Bolt :7687), nightly `pg_dump` backups | Apache Kafka, Apache Spark (GraphX/GraphFrames), Apache Airflow |
+| `maps-presenting` | **Graph presenting** | Caddy (automatic HTTPS), JSON Web API (GHCR image), Redis, GraphHopper, MapLibre frontend | OSRM, Photon geocoder (Elasticsearch), Prometheus + Grafana |
+
+Extended services carry a Docker Compose `extended` profile — start them with `docker compose --profile extended up -d` on the respective VM (single-node educational deployments; admin UIs bound to localhost, reach via SSH tunnel).
+
+DB ports (5432, 7687) accept traffic **only from the presenting VM's IP** (enforced in both the Hetzner firewall and UFW). Only 22/80/443 are public on the presenting VM.
 
 ## Layout
 
 ```
 infra/
-├── terraform/          # 2 Lightsail VMs (app + data), static IPs, firewall, bucket
-└── ansible/            # Hardening, Docker, and the two container stacks
+├── terraform/          # 2 Hetzner servers, firewalls, SSH key
+└── ansible/            # Hardening, Docker, processing_stack + presenting_stack
 .github/workflows/
 ├── infra.yml           # terraform fmt/validate/plan on PR; apply via manual dispatch
 └── deploy.yml          # build API image → GHCR → ansible-playbook deploy on push to main
 ```
 
-Topology:
-
-- **app VM** — Caddy (auto-TLS) → JSON API + Redis + GraphHopper
-- **data VM** — PostgreSQL + pgRouting, Memgraph (ports open only to the app VM)
-- **Lightsail bucket** — photos/GeoJSON/backups
-
 ## One-time setup
 
-1. **Generate a deploy key**: `ssh-keygen -t ed25519 -f ~/.ssh/maps_deploy -N ""`
-2. **GitHub → repo Settings → Secrets and variables → Actions**, add secrets:
-   - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (IAM user with Lightsail permissions)
-   - `DEPLOY_SSH_PUBLIC_KEY`, `DEPLOY_SSH_PRIVATE_KEY` (from step 1)
+1. **Hetzner**: create a project → Security → API Tokens → generate a read/write token.
+2. **Generate a deploy key**: `ssh-keygen -t ed25519 -f ~/.ssh/maps_deploy -N ""`
+3. **GitHub → repo Settings → Secrets and variables → Actions**, add secrets:
+   - `HCLOUD_TOKEN` (from step 1)
+   - `DEPLOY_SSH_PUBLIC_KEY`, `DEPLOY_SSH_PRIVATE_KEY` (from step 2)
    - `POSTGRES_PASSWORD`
-   - `APP_HOST`, `DATA_HOST` (fill after first `terraform apply`)
+   - `PRESENTING_HOST`, `PROCESSING_HOST` (fill after first `terraform apply`)
    - Variable: `DOMAIN` (optional — enables automatic HTTPS via Caddy)
-3. **Provision**: Actions → "Infrastructure (Terraform)" → Run workflow with `apply=true`
+4. **Provision**: Actions → "Infrastructure (Terraform / Hetzner)" → Run workflow with `apply=true`
    (or locally: `cd infra/terraform && terraform init && terraform apply`)
-4. Copy the IP outputs into `APP_HOST` / `DATA_HOST` secrets; point your domain's A record (via Cloudflare) at the app IP.
-5. **Deploy**: push to `main` — the deploy workflow hardens the VMs, installs Docker, and starts both stacks.
+5. Copy the IP outputs into `PRESENTING_HOST` / `PROCESSING_HOST` secrets; point your domain's A record at the presenting IP.
+6. **Deploy**: push to `main` — the deploy workflow hardens both VMs, installs Docker, and starts both stacks.
 
 ## Local usage
 
 ```bash
 cd infra/terraform
 terraform init && terraform apply
-terraform output ansible_inventory > ../ansible/inventory.ini
+terraform output -raw ansible_inventory > ../ansible/inventory.ini
 
 cd ../ansible
 cp group_vars/all.yml.example group_vars/all.yml   # fill in values (gitignored)
 ansible-playbook site.yml
 ```
 
-## Cost (as provisioned)
-
-| Resource | Monthly |
-|---|---|
-| 2× Lightsail medium (2 vCPU / 4 GB) | $48 |
-| Static IPs (attached) | $0 |
-| Lightsail bucket 5 GB | $1 |
-| Cloudflare free, GHCR (public), Actions free tier | $0 |
-| **Total** | **~$49/mo** |
-
-Downsize both bundles or move to Hetzner/Oracle Free Tier by only changing `app_bundle_id`/`data_bundle_id` or reusing the Ansible half — the playbooks are provider-agnostic (any Ubuntu 24.04 host).
-
 ## Notes
 
-- Data VM DB ports (5432, 7687) accept traffic **only from the app VM's static IP** (enforced in both Lightsail firewall and UFW).
-- Nightly `pg_dump` backups with 7-day retention on the data VM; sync `/opt/maps/backups` to the bucket for off-site copies.
-- Terraform state: local by default — uncomment the S3 backend block in `main.tf` for team/CI use.
+- Server types default to `cx32` (4 vCPU / 8 GB / 80 GB NVMe); change `presenting_server_type` / `processing_server_type` to resize.
+- Hetzner Ubuntu images log in as `root`; the inventory and playbooks assume `ansible_user=root`.
+- Nightly `pg_dump` backups with 7-day retention on the processing VM; sync `/opt/maps/backups` to any S3-compatible bucket for off-site copies.
+- Terraform state: local by default — configure an S3-compatible backend in `main.tf` for team/CI use.
