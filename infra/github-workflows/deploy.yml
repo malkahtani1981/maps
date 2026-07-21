@@ -51,12 +51,12 @@ jobs:
         working-directory: infra/ansible
         run: |
           cat > inventory.ini <<EOF
-          [app]
-          ${{ secrets.APP_HOST }}
-          [data]
-          ${{ secrets.DATA_HOST }}
+          [presenting]
+          ${{ secrets.PRESENTING_HOST }}
+          [processing]
+          ${{ secrets.PROCESSING_HOST }}
           [all:vars]
-          ansible_user=ubuntu
+          ansible_user=root
           ansible_ssh_private_key_file=~/.ssh/maps_deploy
           EOF
 
@@ -65,6 +65,6 @@ jobs:
         run: |
           ansible-playbook site.yml \
             --extra-vars "postgres_password=${{ secrets.POSTGRES_PASSWORD }}" \
-            --extra-vars "app_ip=${{ secrets.APP_HOST }} data_ip=${{ secrets.DATA_HOST }}" \
+            --extra-vars "presenting_ip=${{ secrets.PRESENTING_HOST }} processing_ip=${{ secrets.PROCESSING_HOST }}" \
             --extra-vars "domain=${{ vars.DOMAIN }}" \
             --extra-vars "ghcr_username=${{ github.repository_owner }} ghcr_token=${{ secrets.GITHUB_TOKEN }}"
