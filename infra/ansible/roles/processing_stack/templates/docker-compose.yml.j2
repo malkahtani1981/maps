@@ -36,9 +36,12 @@ services:
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      # Advertise the processing VM's IP so the presenting VM's API can connect cross-VM
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://{{ processing_ip }}:9092"
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092" # firewalled to the presenting VM's IP (Hetzner firewall + UFW)
     volumes:
       - kafkadata:/var/lib/kafka/data
 
