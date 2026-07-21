@@ -4,32 +4,38 @@ variable "project" {
   default     = "maps"
 }
 
-variable "region" {
-  description = "AWS region. me-south-1 = Bahrain (closest to Saudi Arabia)."
+variable "hcloud_token" {
+  description = "Hetzner Cloud API token (supply via TF_VAR_hcloud_token / GitHub Actions secret)"
   type        = string
-  default     = "me-south-1"
+  sensitive   = true
 }
 
-variable "blueprint_id" {
-  description = "Lightsail OS blueprint"
+variable "location" {
+  description = "Hetzner location: fsn1/nbg1 (Germany), hel1 (Finland)"
   type        = string
-  default     = "ubuntu_24_04"
+  default     = "fsn1"
 }
 
-# Bundle price reference (Lightsail, Linux):
-#   medium_3_0 = 2 vCPU / 4 GB  / 80 GB SSD  ~ $24/mo  (minimum for routing engines)
-#   large_3_0  = 2 vCPU / 8 GB  / 160 GB SSD ~ $44/mo
-#   xlarge_3_0 = 4 vCPU / 16 GB / 320 GB SSD ~ $84/mo
-variable "app_bundle_id" {
-  description = "Bundle for the app VM (API + Redis + routing engine)"
+variable "image" {
+  description = "OS image"
   type        = string
-  default     = "medium_3_0"
+  default     = "ubuntu-24.04"
 }
 
-variable "data_bundle_id" {
-  description = "Bundle for the data VM (Postgres/pgRouting + Memgraph)"
+# Server type reference (Hetzner shared vCPU, x86):
+#   cx22 = 2 vCPU / 4 GB  / 40 GB NVMe  ~ €4.5/mo
+#   cx32 = 4 vCPU / 8 GB  / 80 GB NVMe  ~ €7.6/mo
+#   cx42 = 8 vCPU / 16 GB / 160 GB NVMe ~ €15/mo
+variable "presenting_server_type" {
+  description = "Server type for the graph-presenting VM (Caddy, API, Redis, GraphHopper)"
   type        = string
-  default     = "medium_3_0"
+  default     = "cx32"
+}
+
+variable "processing_server_type" {
+  description = "Server type for the graph-processing VM (PostgreSQL/pgRouting, Memgraph, Spark batch)"
+  type        = string
+  default     = "cx32"
 }
 
 variable "ssh_public_key" {
@@ -38,7 +44,7 @@ variable "ssh_public_key" {
 }
 
 variable "ssh_allowed_cidrs" {
-  description = "CIDRs allowed to SSH. Tighten to your IP and/or GitHub Actions runner ranges."
+  description = "CIDRs allowed to SSH. Tighten to your IP and/or CI runner ranges."
   type        = list(string)
-  default     = ["0.0.0.0/0"]
+  default     = ["0.0.0.0/0", "::/0"]
 }
