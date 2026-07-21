@@ -1,0 +1,45 @@
+---
+- name: Update apt cache & upgrade
+  apt:
+    update_cache: true
+    upgrade: safe
+
+- name: Install base packages
+  apt:
+    name: [ufw, fail2ban, unattended-upgrades, curl, git, htop]
+    state: present
+
+- name: Enable unattended security upgrades
+  copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+
+- name: Disable SSH password authentication
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PasswordAuthentication"
+    line: "PasswordAuthentication no"
+  notify: restart sshd
+
+- name: UFW — default deny incoming
+  ufw:
+    direction: incoming
+    policy: deny
+
+- name: UFW — allow SSH
+  ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+
+- name: UFW — enable
+  ufw:
+    state: enabled
+
+- name: Start fail2ban
+  service:
+    name: fail2ban
+    state: started
+    enabled: true
