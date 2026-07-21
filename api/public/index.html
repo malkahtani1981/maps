@@ -18,10 +18,10 @@
     header p { font-size: 12px; color: var(--muted); }
     #wrap { flex: 1; display: flex; min-height: 0; }
     #map { flex: 1; }
-    aside { width: 300px; border-left: 1px solid var(--line); background: var(--panel); padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+    aside { width: 320px; border-left: 1px solid var(--line); background: var(--panel); padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
     aside h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 6px; }
     .hint { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
-    select, button { width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: #12171e; color: var(--text); font-size: 13px; }
+    select, button, input { width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: #12171e; color: var(--text); font-size: 13px; }
     button { cursor: pointer; background: var(--accent); color: #14100a; font-weight: 600; border: none; }
     button:disabled { opacity: 0.4; cursor: default; }
     button.secondary { background: #232c38; color: var(--text); font-weight: 500; }
@@ -34,6 +34,12 @@
     .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; }
     .on { background: #43d17c; } .off { background: #5a6675; }
     #status { font-size: 12px; color: var(--accent2); min-height: 16px; }
+    .popup { font-size: 12px; }
+    .popup a { display: block; color: var(--accent2); text-decoration: none; margin: 3px 0; }
+    .popup a:hover { text-decoration: underline; }
+    .verify-links { display: flex; flex-direction: column; gap: 4px; }
+    .verify-links a { font-size: 12px; color: var(--accent2); text-decoration: none; }
+    .verify-links a:hover { text-decoration: underline; }
     @media (max-width: 700px) { #wrap { flex-direction: column; } aside { width: 100%; border-left: none; border-top: 1px solid var(--line); } }
   </style>
 </head>
@@ -45,6 +51,10 @@
   <div id="wrap">
     <div id="map"></div>
     <aside>
+      <section>
+        <h2>Map layer</h2>
+        <select id="layer"></select>
+      </section>
       <section>
         <h2>Engine</h2>
         <select id="engine">
@@ -63,6 +73,10 @@
         <button id="clearBtn" class="secondary">Clear</button>
       </section>
       <div id="status"></div>
+      <section>
+        <h2>Selected point</h2>
+        <div id="selectedPoint" class="hint">Click any point on the map for coordinates, address, and verification links.</div>
+      </section>
       <section>
         <h2>Result</h2>
         <table id="result"><tr><td colspan="2" class="hint">Pick two points, then Route. Route the same pair twice to see the cache hit.</td></tr></table>
@@ -83,42 +97,93 @@
     // whole app sits behind an /api prefix (Replit preview proxy).
     const API = location.pathname.replace(/\/+$/, "").endsWith("/api") ? "." : "api";
 
-    // Panels load independently of the map, so API data shows even if the
-    // MapLibre CDN script is unavailable.
-    fetch(`${API}/graph/stats`).then((r) => r.json()).then((s) => {
+    const statsPromise = fetch(`${API}/graph/stats`).then((r) => r.json());
+    const enginesPromise = fetch(`${API}/engines`).then((r) => r.json());
+    const sourcesPromise = fetch(`${API}/map-sources`).then((r) => r.json());
+
+    statsPromise.then((s) => {
       document.getElementById("stats").innerHTML =
         `<tr><td>OSM ways</td><td>${s.ways.toLocaleString()}</td></tr>
          <tr><td>Graph nodes</td><td>${s.nodes.toLocaleString()}</td></tr>
          <tr><td>Directed edges</td><td>${s.directedEdges.toLocaleString()}</td></tr>`;
     });
-    fetch(`${API}/engines`).then((r) => r.json()).then(({ engines }) => {
+    enginesPromise.then(({ engines }) => {
       document.getElementById("engines").innerHTML = engines.map((e) =>
         `<div><span class="dot ${e.available ? "on" : "off"}"></span><b>${e.name}</b> — ${e.detail}</div>`).join("");
     });
 
-    const map = new maplibregl.Map({
-      container: "map",
-      style: {
-        version: 8,
-        sources: { osm: { type: "raster", tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"], tileSize: 256, attribution: "© OpenStreetMap contributors" } },
-        layers: [{ id: "osm", type: "raster", source: "osm" }],
-      },
-      center: [37.93, 26.62], // Al Ula
-      zoom: 12,
-    });
-    map.addControl(new maplibregl.NavigationControl());
-
+    let map;
+    let currentSourceId = "osm";
     let points = []; // [{lngLat, marker}]
     const routeBtn = document.getElementById("routeBtn");
     const status = document.getElementById("status");
+    const selectedPoint = document.getElementById("selectedPoint");
 
-    map.on("click", (e) => {
-      if (points.length >= 2) return;
-      const marker = new maplibregl.Marker({ color: points.length === 0 ? "#43d17c" : "#e05555" })
-        .setLngLat(e.lngLat).addTo(map);
-      points.push({ lngLat: e.lngLat, marker });
-      routeBtn.disabled = points.length !== 2;
-      status.textContent = points.length === 1 ? "Now click the destination." : "";
+    function setMapStyle(sources) {
+      const src = sources[currentSourceId] || sources[0];
+      const style = {
+        version: 8,
+        sources: { [src.id]: { type: src.type, tiles: src.tiles, tileSize: src.tileSize, attribution: src.attribution } },
+        layers: [{ id: src.id, type: src.type, source: src.id }],
+      };
+      if (map) map.setStyle(style);
+    }
+
+    sourcesPromise.then(({ sources }) => {
+      const layerSelect = document.getElementById("layer");
+      layerSelect.innerHTML = sources.map((s) => `<option value="${s.id}" ${s.default ? "selected" : ""}>${s.name}</option>`).join("");
+      currentSourceId = sources.find((s) => s.default)?.id || sources[0].id;
+
+      map = new maplibregl.Map({
+        container: "map",
+        style: {
+          version: 8,
+          sources: { [currentSourceId]: { type: "raster", tiles: sources.find((s) => s.id === currentSourceId).tiles, tileSize: 256, attribution: sources.find((s) => s.id === currentSourceId).attribution } },
+          layers: [{ id: currentSourceId, type: "raster", source: currentSourceId }],
+        },
+        center: [37.93, 26.62], // Al Ula
+        zoom: 12,
+      });
+      map.addControl(new maplibregl.NavigationControl());
+
+      layerSelect.onchange = (e) => {
+        currentSourceId = e.target.value;
+        const src = sources.find((s) => s.id === currentSourceId);
+        map.setStyle({
+          version: 8,
+          sources: { [src.id]: { type: src.type, tiles: src.tiles, tileSize: src.tileSize, attribution: src.attribution } },
+          layers: [{ id: src.id, type: src.type, source: src.id }],
+        });
+      };
+
+      map.on("click", async (e) => {
+        const { lat, lng } = e.lngLat;
+        selectedPoint.innerHTML = `<span class="hint">Loading…</span>`;
+        try {
+          const res = await fetch(`${API}/location-info?point=${lat},${lng}`);
+          const info = await res.json();
+          const addr = info.displayName || "Unknown location";
+          selectedPoint.innerHTML = `
+            <div class="popup">
+              <b>${addr}</b><br/>
+              ${lat.toFixed(6)}, ${lng.toFixed(6)}
+              <div class="verify-links">
+                <a href="${info.links.openstreetmap}" target="_blank" rel="noopener">OpenStreetMap</a>
+                <a href="${info.links.googleMaps}" target="_blank" rel="noopener">Google Maps</a>
+                <a href="${info.links.googleEarth}" target="_blank" rel="noopener">Google Earth</a>
+              </div>
+            </div>
+          `;
+        } catch (err) {
+          selectedPoint.innerHTML = `<span class="hint">${lat.toFixed(6)}, ${lng.toFixed(6)}</span>`;
+        }
+        if (points.length >= 2) return;
+        const marker = new maplibregl.Marker({ color: points.length === 0 ? "#43d17c" : "#e05555" })
+          .setLngLat(e.lngLat).addTo(map);
+        points.push({ lngLat: e.lngLat, marker });
+        routeBtn.disabled = points.length !== 2;
+        status.textContent = points.length === 1 ? "Now click the destination." : "";
+      });
     });
 
     document.getElementById("clearBtn").onclick = () => {
@@ -126,6 +191,7 @@
       points = [];
       routeBtn.disabled = true;
       status.textContent = "";
+      selectedPoint.innerHTML = "Click any point on the map for coordinates, address, and verification links.";
       if (map.getLayer("route")) { map.removeLayer("route"); map.removeSource("route"); }
     };
 
